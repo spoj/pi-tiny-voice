@@ -72,7 +72,7 @@ export default function (pi: ExtensionAPI) {
 				session: {
 					model: "gpt-live-1-codex",
 					instructions: recent ? `${INSTRUCTIONS}\n\nRecent conversation in pi:\n\n${recent}` : INSTRUCTIONS,
-					audio: { output: { voice: "cove" } },
+					audio: { output: { voice: "sol" } },
 					delegation: { type: "client", ack_filler: true },
 				},
 			}),
