@@ -1,0 +1,76 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>pi voice</title>
+<style>
+	body { font: 16px system-ui, sans-serif; margin: 1rem; background: #111; color: #ccc; }
+	button { width: 100%; padding: 1rem; font-size: 1.4rem; }
+	p { white-space: pre-wrap; margin: 0.6rem 0; }
+	.user { color: #7bf; }
+	.assistant { color: #fff; }
+	.speakable { color: #aaa; }
+	.commentary { color: #666; font-size: 0.85rem; }
+	.error { color: #f66; }
+</style>
+<button id="toggle">Start</button>
+<div id="log"></div>
+<script>
+	let pc, events;
+
+	function show(kind, text) {
+		const line = document.createElement("p");
+		line.className = kind;
+		line.textContent = text;
+		log.prepend(line);
+	}
+
+	async function start() {
+		toggle.textContent = "Connecting…";
+		pc = new RTCPeerConnection();
+		const mic = await navigator.mediaDevices.getUserMedia({
+			audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+		});
+		pc.addTrack(mic.getTracks()[0]);
+		const speaker = new Audio();
+		speaker.autoplay = true;
+		pc.ontrack = (e) => (speaker.srcObject = e.streams[0]);
+		pc.onconnectionstatechange = () => pc?.connectionState === "failed" && stop();
+		const dc = pc.createDataChannel("oai-events");
+		dc.onopen = () => {
+			toggle.textContent = "Stop";
+			events = new EventSource("events");
+			events.onmessage = (e) => {
+				const appends = JSON.parse(e.data);
+				for (const append of appends) dc.send(JSON.stringify(append));
+				show(appends[0].channel, appends.map((append) => append.content[0].text).join(""));
+			};
+			events.addEventListener("end", stop);
+		};
+		dc.onmessage = (e) => {
+			const event = JSON.parse(e.data);
+			if (event.type === "delegation.created") fetch("delegate", { method: "POST", body: e.data });
+			if (event.type === "turn.done") show(event.turn.role, event.turn.transcript.trim());
+			if (event.type === "error") show("error", event.error.message);
+		};
+		await pc.setLocalDescription(await pc.createOffer());
+		const answer = await fetch("call", { method: "POST", body: pc.localDescription.sdp });
+		if (!answer.ok) throw new Error(await answer.text());
+		await pc.setRemoteDescription({ type: "answer", sdp: await answer.text() });
+	}
+
+	function stop() {
+		events?.close();
+		pc?.getSenders().forEach((sender) => sender.track?.stop());
+		pc?.close();
+		pc = events = undefined;
+		toggle.textContent = "Start";
+	}
+
+	toggle.onclick = () =>
+		pc
+			? stop()
+			: start().catch((error) => {
+					show("error", error.message);
+					stop();
+				});
+</script>

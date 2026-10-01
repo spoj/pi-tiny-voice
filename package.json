@@ -1,0 +1,27 @@
+{
+  "name": "pi-tiny-voice",
+  "version": "0.1.0",
+  "description": "Talk to Pi from any browser with ChatGPT's realtime voice",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.ts",
+  "files": [
+    "index.ts",
+    "page.html",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "voice"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
