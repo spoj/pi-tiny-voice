@@ -15,7 +15,7 @@
 <button id="toggle">Start</button>
 <div id="log"></div>
 <script>
-	let pc, events;
+	let pc, events, turns = [];
 
 	function show(kind, text) {
 		const line = document.createElement("p");
@@ -48,8 +48,15 @@
 		};
 		dc.onmessage = (e) => {
 			const event = JSON.parse(e.data);
-			if (event.type === "delegation.created") fetch("delegate", { method: "POST", body: e.data });
-			if (event.type === "turn.done") show(event.turn.role, event.turn.transcript.trim());
+			if (event.type === "delegation.created") {
+				fetch("delegate", { method: "POST", body: JSON.stringify({ item: event.item, turns }) });
+				turns = [];
+			}
+			if (event.type === "turn.done") {
+				const said = event.turn.transcript.trim();
+				turns.push(`${event.turn.role === "user" ? "User" : "Voice"}: ${said}`);
+				show(event.turn.role, said);
+			}
 			if (event.type === "error") show("error", event.error.message);
 		};
 		await pc.setLocalDescription(await pc.createOffer());

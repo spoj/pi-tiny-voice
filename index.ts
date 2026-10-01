@@ -90,9 +90,11 @@ export default function (pi: ExtensionAPI) {
 			return res.writeHead(answer.status).end(await answer.text());
 		}
 		if (route === "delegate") {
-			const { item } = JSON.parse(body);
+			const { item, turns } = JSON.parse(body);
 			delegation = item.id;
-			pi.sendUserMessage(item.content.map((part: { text: string }) => part.text).join(""), { deliverAs: "steer" });
+			const request = item.content.map((part: { text: string }) => part.text).join("");
+			const transcript = turns.length ? `<transcript>\n${turns.join("\n")}\n</transcript>\n` : "";
+			pi.sendUserMessage(`<voice>\n${transcript}${request}\n</voice>`, { deliverAs: "steer" });
 			return res.end();
 		}
 		if (route === "events") {
