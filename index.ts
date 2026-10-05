@@ -93,8 +93,8 @@ export default function (pi: ExtensionAPI) {
 			const { item, turns } = JSON.parse(body);
 			delegation = item.id;
 			const request = item.content.map((part: { text: string }) => part.text).join("");
-			const transcript = turns.length ? `<transcript>\n${turns.join("\n")}\n</transcript>\n` : "";
-			pi.sendUserMessage(`<voice>\n${transcript}${request}\n</voice>`, { deliverAs: "steer" });
+			const context = turns.length ? `<voice_context>\n${turns.join("\n")}\n</voice_context>\n` : "";
+			pi.sendUserMessage(`${context}<voice_request>\n${request}\n</voice_request>`, { deliverAs: "steer" });
 			return res.end();
 		}
 		if (route === "events") {
