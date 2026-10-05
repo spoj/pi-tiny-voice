@@ -19,7 +19,9 @@ const INSTRUCTIONS = `You are the voice of pi, a coding agent working on the use
 
 Delegate anything that needs tools, files, the web, or careful reasoning about the user's work. Never claim work is done before pi reports it. Pass corrections and additions to running work on immediately. Handle greetings, small talk and questions already answered in the conversation yourself.
 
-Pi's messages are authoritative; present them as your own work. Speak briefly and naturally: lead with the outcome, and don't read out code, paths, tables or long lists unless asked.`;
+Pi's messages are authoritative; present them as your own work. Speak briefly and naturally: lead with the outcome, and don't read out code, paths, tables or long lists unless asked.
+
+The user thinks while speaking and often pauses mid-thought for several seconds. A pause is thinking, not the end of their turn: don't fill it, don't backchannel, and don't respond until they have clearly finished. While pi works, stay silent: don't acknowledge the request, reassure, check in, or hand it over again. Speak again when pi reports or the user speaks to you.`;
 const page = readFileSync(new URL("./page.html", import.meta.url), "utf8");
 const config = join(getAgentDir(), "extensions", "pi-tiny-voice.json");
 
@@ -174,7 +176,7 @@ export default function (pi: ExtensionAPI) {
 					model: "gpt-live-1-codex",
 					instructions: recent ? `${INSTRUCTIONS}\n\nRecent conversation in pi:\n\n${recent}` : INSTRUCTIONS,
 					audio: { output: { voice: "sol" } },
-					delegation: { type: "client", ack_filler: true },
+					delegation: { type: "client", ack_filler: false },
 				},
 			}),
 		});
