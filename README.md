@@ -9,7 +9,7 @@ Talk to [Pi](https://github.com/earendil-works/pi) from any browser. A realtime 
 /voice off   stop
 ```
 
-Open the printed address and press Start. With [Tailscale](https://tailscale.com), the address is an HTTPS link that any device on your tailnet can open; without it, open the local address on the same machine.
+Open the printed address and press Start. The page shows the conversation in Pi much as the terminal does, tool calls and results included, and follows it live. With [Tailscale](https://tailscale.com), the address is an HTTPS link that any device on your tailnet can open; without it, open the local address on the same machine.
 
 ## How it works
 
@@ -23,4 +23,4 @@ Open the printed address and press Start. With [Tailscale](https://tailscale.com
 ## Caveats
 
 - The ChatGPT realtime endpoint is private and could change without notice.
-- Only the most recently started call hears Pi's replies. Switching Pi sessions ends the call.
+- Only the most recently opened page follows Pi; opening the address elsewhere ends the earlier page and its call. Switching Pi sessions ends both.

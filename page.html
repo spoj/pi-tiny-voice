@@ -3,26 +3,90 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>pi voice</title>
 <style>
-	body { font: 16px system-ui, sans-serif; margin: 1rem; background: #111; color: #ccc; }
-	button { width: 100%; padding: 1rem; font-size: 1.4rem; }
-	p { white-space: pre-wrap; margin: 0.6rem 0; }
-	.user { color: #7bf; }
-	.assistant { color: #fff; }
-	.speakable { color: #aaa; }
-	.commentary { color: #666; font-size: 0.85rem; }
-	.error { color: #f66; }
+	:root { /*theme*/ }
+	body { margin: 0; min-height: 100dvh; display: flex; flex-direction: column; background: Canvas; color: var(--text); font: 14px/1.4 ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+	#log { flex: 1; }
+	:where(#log > *) { margin: 1lh 0; padding: 0 1ch; }
+	.user, .tool, .custom { padding: 1lh 1ch; }
+	.user { background: var(--userMessageBg); color: var(--userMessageText); }
+	.tool { background: var(--toolPendingBg); white-space: pre-wrap; }
+	.tool.success { background: var(--toolSuccessBg); }
+	.tool.error { background: var(--toolErrorBg); }
+	.tool > b { color: var(--toolTitle); }
+	.out { color: var(--toolOutput); margin-top: 1lh; }
+	.add { color: var(--toolDiffAdded); }
+	.del { color: var(--toolDiffRemoved); }
+	.accent { color: var(--accent); }
+	.muted, .voice { color: var(--muted); }
+	.thinking { color: var(--thinkingText); font-style: italic; }
+	.custom { background: var(--customMessageBg); color: var(--customMessageText); }
+	.custom b:first-child { color: var(--customMessageLabel); }
+	.error { color: var(--error); }
+	summary { cursor: pointer; }
+	p, pre, ul, ol, blockquote, table, hr, h1, h2, h3, h4 { margin: 1lh 0; }
+	:is(.md, .user, .custom, .thinking, blockquote, li) > :first-child { margin-top: 0; }
+	:is(.md, .user, .custom, .thinking, blockquote, li) > :last-child { margin-bottom: 0; }
+	p { white-space: pre-wrap; }
+	h1, h2, h3, h4 { font-size: 1em; color: var(--mdHeading); }
+	h1 { text-decoration: underline; }
+	h3::before { content: "### "; }
+	h4::before { content: "#### "; }
+	a { color: var(--mdLink); }
+	code { font: inherit; color: var(--mdCode); }
+	pre { color: var(--mdCodeBlock); white-space: pre-wrap; }
+	pre::before, pre::after { content: "```"; display: block; color: var(--mdCodeBlockBorder); }
+	pre code { display: block; padding-left: 2ch; color: inherit; }
+	blockquote { color: var(--mdQuote); font-style: italic; border-left: 1px solid var(--mdQuoteBorder); padding-left: 1ch; }
+	hr { border: 0; border-top: 1px solid var(--mdHr); }
+	ul { padding-left: 2ch; list-style: "- "; }
+	ol { padding-left: 3ch; }
+	li::marker { color: var(--mdListBullet); }
+	table { border-collapse: collapse; }
+	th, td { border: 1px solid var(--borderMuted); padding: 0 1ch; }
+	img { display: block; max-width: 100%; }
+	footer { position: sticky; bottom: 0; background: Canvas; border-top: 1px solid var(--border); padding: 1ch; }
+	#busy { color: var(--accent); margin-bottom: 1ch; }
+	button { width: 100%; padding: 1lh; font: inherit; font-size: 1.2em; color: var(--text); background: var(--userMessageBg); border: 1px solid var(--border); }
 </style>
-<button id="toggle">Start</button>
 <div id="log"></div>
+<footer>
+	<div id="busy" hidden>Working...</div>
+	<button id="toggle">Start</button>
+</footer>
 <script>
-	let pc, events, turns = [];
+	let pc, dc, turns = [], height = 0;
+
+	// Stay at the bottom while content arrives, unless the user scrolled up.
+	new ResizeObserver(() => {
+		if (scrollY + innerHeight >= height - 20) scrollTo(0, document.body.scrollHeight);
+		height = document.body.scrollHeight;
+	}).observe(document.body);
 
 	function show(kind, text) {
 		const line = document.createElement("p");
 		line.className = kind;
 		line.textContent = text;
-		log.prepend(line);
+		log.append(line);
 	}
+
+	const events = new EventSource("events");
+	events.onopen = () => (log.innerHTML = "");
+	events.addEventListener("show", (e) => {
+		const { html, into, status } = JSON.parse(e.data);
+		const box = into ? document.getElementById(into) : log;
+		if (status) box.className = `tool ${status}`;
+		box.insertAdjacentHTML("beforeend", html);
+	});
+	events.addEventListener("voice", (e) => {
+		if (dc?.readyState === "open") for (const append of JSON.parse(e.data)) dc.send(JSON.stringify(append));
+	});
+	events.addEventListener("busy", (e) => (busy.hidden = !JSON.parse(e.data)));
+	events.addEventListener("end", () => {
+		events.close();
+		stop();
+		toggle.disabled = true;
+		toggle.textContent = "Ended";
+	});
 
 	async function start() {
 		toggle.textContent = "Connecting…";
@@ -35,17 +99,8 @@
 		speaker.autoplay = true;
 		pc.ontrack = (e) => (speaker.srcObject = e.streams[0]);
 		pc.onconnectionstatechange = () => pc?.connectionState === "failed" && stop();
-		const dc = pc.createDataChannel("oai-events");
-		dc.onopen = () => {
-			toggle.textContent = "Stop";
-			events = new EventSource("events");
-			events.onmessage = (e) => {
-				const appends = JSON.parse(e.data);
-				for (const append of appends) dc.send(JSON.stringify(append));
-				show(appends[0].channel, appends.map((append) => append.content[0].text).join(""));
-			};
-			events.addEventListener("end", stop);
-		};
+		dc = pc.createDataChannel("oai-events");
+		dc.onopen = () => (toggle.textContent = "Stop");
 		dc.onmessage = (e) => {
 			const event = JSON.parse(e.data);
 			if (event.type === "delegation.created") {
@@ -53,9 +108,9 @@
 				turns = [];
 			}
 			if (event.type === "turn.done") {
-				const said = event.turn.transcript.trim();
-				turns.push(`${event.turn.role === "user" ? "User" : "Voice"}: ${said}`);
-				show(event.turn.role, said);
+				const turn = `${event.turn.role === "user" ? "User" : "Voice"}: ${event.turn.transcript.trim()}`;
+				turns.push(turn);
+				show("voice", turn);
 			}
 			if (event.type === "error") show("error", event.error.message);
 		};
@@ -66,10 +121,9 @@
 	}
 
 	function stop() {
-		events?.close();
 		pc?.getSenders().forEach((sender) => sender.track?.stop());
 		pc?.close();
-		pc = events = undefined;
+		pc = dc = undefined;
 		toggle.textContent = "Start";
 	}
 
