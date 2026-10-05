@@ -1,13 +1,15 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	type ExtensionAPI,
 	type ExtensionCommandContext,
+	getAgentDir,
 	sessionEntryToContextMessages,
 } from "@earendil-works/pi-coding-agent";
 import { colorToHex, Marked } from "@earendil-works/pi-tui";
@@ -19,6 +21,7 @@ Delegate anything that needs tools, files, the web, or careful reasoning about t
 
 Pi's messages are authoritative; present them as your own work. Speak briefly and naturally: lead with the outcome, and don't read out code, paths, tables or long lists unless asked.`;
 const page = readFileSync(new URL("./page.html", import.meta.url), "utf8");
+const config = join(getAgentDir(), "extensions", "pi-tiny-voice.json");
 
 type Content = string | { type: string; text?: string; data?: string; mimeType?: string }[];
 const text = (content: Content) =>
@@ -120,7 +123,7 @@ export default function (pi: ExtensionAPI) {
 	let url = "";
 	let delegation: string | undefined;
 	// Seconds the user must be quiet before the page hands their words to pi.
-	const wait = 5;
+	let wait: number = existsSync(config) ? JSON.parse(readFileSync(config, "utf8")).wait : 5;
 
 	function send(event: string, data: unknown) {
 		stream?.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -276,12 +279,23 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", stop);
 
 	pi.registerCommand("voice", {
-		description: "Talk to pi from a browser (/voice off to stop)",
+		description: "Talk to pi from a browser (/voice off to stop, /voice wait <seconds> to set how long you can pause)",
 		handler: async (args, commandCtx) => {
 			ctx = commandCtx;
-			if (args.trim() === "off") {
+			const [action, value] = args.trim().split(/\s+/);
+			if (action === "off") {
 				stop();
 				return ctx.ui.setStatus("voice", undefined);
+			}
+			if (action === "wait") {
+				if (value) {
+					if (!(Number(value) > 0)) return ctx.ui.notify("Usage: /voice wait <seconds>", "error");
+					wait = Number(value);
+					mkdirSync(dirname(config), { recursive: true });
+					writeFileSync(config, `${JSON.stringify({ wait })}\n`);
+					send("wait", wait);
+				}
+				return ctx.ui.notify(`Voice: your words go to pi once you've been quiet for ${wait} s`, "info");
 			}
 			if (!server) await start();
 			ctx.ui.notify(`Voice: ${url}`, "info");
