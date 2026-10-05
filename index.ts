@@ -228,11 +228,11 @@ export default function (pi: ExtensionAPI) {
 			res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
 			for (const message of ctx.sessionManager.buildContextEntries().flatMap(sessionEntryToContextMessages)) show(message);
 			send("busy", !ctx.isIdle());
-			ctx.ui.setStatus("voice", "🎙 live");
+			ctx.ui.setStatus("voice", "voice:live");
 			res.on("close", () => {
 				if (stream !== res) return;
 				stream = undefined;
-				ctx.ui.setStatus("voice", "🎙 ready");
+				ctx.ui.setStatus("voice", "voice:ready");
 			});
 			return;
 		}
@@ -261,7 +261,7 @@ export default function (pi: ExtensionAPI) {
 			tunnel.on("exit", () => resolve(local));
 		});
 		url = `${base}${token}/`;
-		ctx.ui.setStatus("voice", "🎙 ready");
+		ctx.ui.setStatus("voice", "voice:ready");
 	}
 
 	function stop() {
