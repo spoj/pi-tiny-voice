@@ -119,7 +119,6 @@ export default function (pi: ExtensionAPI) {
 	let token = "";
 	let url = "";
 	let delegation: string | undefined;
-	let requested = "";
 
 	function send(event: string, data: unknown) {
 		stream?.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -194,11 +193,9 @@ export default function (pi: ExtensionAPI) {
 		}
 		if (route === "delegate") {
 			const { id, request, turns } = JSON.parse(body);
-			// The voice can hand over a request again while pi is still on it; pi answers the newest handoff.
-			const repeat = request === requested && !ctx.isIdle();
+			// A handoff without a request repeats one pi is working on; pi answers the newest handoff.
 			delegation = id;
-			requested = request;
-			if (repeat) return res.end();
+			if (!request) return res.end();
 			const context = turns.length ? `<voice_context>\n${turns.join("\n")}\n</voice_context>\n` : "";
 			pi.sendUserMessage(`${context}<voice_request>\n${request}\n</voice_request>`, { deliverAs: "steer" });
 			return res.end();

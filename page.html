@@ -63,7 +63,8 @@
 </footer>
 <script>
 	let pc, dc, turns = [], height = 0;
-	const delegated = new Set();
+	// The user's words pi has, and whether the user may still be finishing them.
+	let handed = "", finishing = false;
 
 	log.onclick = (e) => e.target.matches(".trace > b") && e.target.parentElement.classList.toggle("open");
 
@@ -115,18 +116,29 @@
 		dc.onmessage = (e) => {
 			const event = JSON.parse(e.data);
 			if (event.type === "delegation.created" && event.item.target === "client") {
+				const id = event.item.id;
 				const request = event.item.content
 					.filter((part) => part.type === "input_text")
 					.map((part) => part.text)
-					.join("");
-				delegated.add(request.trim());
-				fetch("delegate", { method: "POST", body: JSON.stringify({ id: event.item.id, request, turns }) });
-				turns = [];
+					.join("")
+					.trim();
+				// While pi works, the voice hands the same words over again; that only moves pi's answer to the new handoff.
+				if (request === handed && !busy.hidden) fetch("delegate", { method: "POST", body: JSON.stringify({ id }) });
+				else {
+					fetch("delegate", { method: "POST", body: JSON.stringify({ id, request, turns }) });
+					turns = [];
+					handed = request;
+					finishing = true;
+				}
 			}
 			if (event.type === "turn.done") {
-				const turn = `${event.turn.role === "user" ? "User" : "Voice"}: ${event.turn.transcript.trim()}`;
-				// A user turn can finish after its handoff, which already carries it as the request.
-				if (event.turn.role !== "user" || !delegated.has(event.turn.transcript.trim())) turns.push(turn);
+				const user = event.turn.role === "user";
+				const said = event.turn.transcript.trim();
+				const turn = `${user ? "User" : "Voice"}: ${said}`;
+				// The user's turn can finish after its handoff, which carries it, sometimes cut short.
+				if (user && finishing && said.startsWith(handed)) handed = said;
+				else turns.push(turn);
+				if (user) finishing = false;
 				show("voice", turn);
 			}
 			if (event.type === "error") show("error", event.error.message);
