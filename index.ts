@@ -119,6 +119,8 @@ export default function (pi: ExtensionAPI) {
 	let token = "";
 	let url = "";
 	let delegation: string | undefined;
+	// Seconds the user must be quiet before the page hands their words to pi.
+	const wait = 5;
 
 	function send(event: string, data: unknown) {
 		stream?.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -193,7 +195,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		if (route === "delegate") {
 			const { id, request, turns } = JSON.parse(body);
-			// A handoff without a request repeats one pi is working on; pi answers the newest handoff.
+			// A handoff without new words from the user only moves pi's answer to the newest delegation.
 			delegation = id;
 			if (!request) return res.end();
 			const context = turns.length ? `<voice_context>\n${turns.join("\n")}\n</voice_context>\n` : "";
@@ -206,6 +208,7 @@ export default function (pi: ExtensionAPI) {
 			res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
 			for (const message of ctx.sessionManager.buildContextEntries().flatMap(sessionEntryToContextMessages)) show(message);
 			send("busy", !ctx.isIdle());
+			send("wait", wait);
 			ctx.ui.setStatus("voice", "🎙 live");
 			res.on("close", () => {
 				if (stream !== res) return;
