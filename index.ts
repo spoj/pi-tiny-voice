@@ -52,6 +52,9 @@ function fold(body: string, keep: number) {
 	return `<div class="out">${tail ? more + shown : shown + more}</div>`;
 }
 
+// Like pi-tiny-tools: thinking, tools and extension messages shrink to a colored name; tapping it shows the block.
+const trace = (name: string, block: string) => `<span class="trace"><b>${esc(name)}</b>${block}<wbr></span>`;
+
 function tool(id: string, name: string, args: Record<string, unknown>, failed: boolean) {
 	let title = `<b>${esc(name)}</b>`;
 	if (name === "bash") title = `<b>$ ${esc(args.command)}</b>`;
@@ -65,7 +68,7 @@ function tool(id: string, name: string, args: Record<string, unknown>, failed: b
 		title += ` <span class="muted">${esc(pairs.length > 100 ? `${pairs.slice(0, 97)}...` : pairs)}</span>`;
 	}
 	const preview = name === "write" ? fold(String(args.content), 10) : "";
-	return `<div class="tool${failed ? " error" : ""}" id="${esc(id)}">${title}${preview}</div>`;
+	return trace(name, `<div class="tool${failed ? " error" : ""}" id="${esc(id)}">${title}${preview}</div>`);
 }
 
 // The page shows pi's transcript the way its terminal does; a tool result fills in its call's box.
@@ -79,7 +82,7 @@ function render(message: AgentMessage): { html: string; into?: string; status?: 
 				if (part.type === "toolCall") return tool(part.id, part.name, part.arguments, failed);
 				if (part.type === "text" && part.text.trim()) return `<div class="md">${md(part.text)}</div>`;
 				if (part.type === "thinking" && part.thinking.trim())
-					return `<details class="thinking"><summary>Thinking...</summary>${md(part.thinking)}</details>`;
+					return trace("think", `<div class="thinking">${md(part.thinking)}</div>`);
 				return "";
 			});
 			if (message.stopReason === "aborted") parts.push(`<div class="error">Operation aborted</div>`);
@@ -101,10 +104,10 @@ function render(message: AgentMessage): { html: string; into?: string; status?: 
 		}
 		case "custom":
 			return message.display
-				? { html: `<div class="custom"><b>[${esc(message.customType)}]</b>${md(text(message.content))}</div>` }
+				? { html: trace(message.customType, `<div class="custom">${md(text(message.content))}</div>`) }
 				: undefined;
 		case "compactionSummary":
-			return { html: `<details class="custom"><summary><b>[compaction]</b></summary>${md(message.summary)}</details>` };
+			return { html: trace("compaction", `<div class="custom">${md(message.summary)}</div>`) };
 	}
 }
 
@@ -116,6 +119,7 @@ export default function (pi: ExtensionAPI) {
 	let token = "";
 	let url = "";
 	let delegation: string | undefined;
+	let requested = "";
 
 	function send(event: string, data: unknown) {
 		stream?.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -189,9 +193,12 @@ export default function (pi: ExtensionAPI) {
 			return res.writeHead(answer.status).end(await answer.text());
 		}
 		if (route === "delegate") {
-			const { item, turns } = JSON.parse(body);
-			delegation = item.id;
-			const request = item.content.map((part: { text: string }) => part.text).join("");
+			const { id, request, turns } = JSON.parse(body);
+			// The voice can hand over a request again while pi is still on it; pi answers the newest handoff.
+			const repeat = request === requested && !ctx.isIdle();
+			delegation = id;
+			requested = request;
+			if (repeat) return res.end();
 			const context = turns.length ? `<voice_context>\n${turns.join("\n")}\n</voice_context>\n` : "";
 			pi.sendUserMessage(`${context}<voice_request>\n${request}\n</voice_request>`, { deliverAs: "steer" });
 			return res.end();

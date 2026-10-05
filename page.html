@@ -20,7 +20,15 @@
 	.muted, .voice { color: var(--muted); }
 	.thinking { color: var(--thinkingText); font-style: italic; }
 	.custom { background: var(--customMessageBg); color: var(--customMessageText); }
-	.custom b:first-child { color: var(--customMessageLabel); }
+	.trace { padding: 0 0 0 1ch; }
+	.trace:not(.trace + .trace)::before { content: "› "; color: var(--dim); }
+	.trace > b { font-weight: normal; cursor: pointer; color: var(--accent); }
+	.trace:has(> .success) > b { color: var(--success); }
+	.trace:has(> .error) > b { color: var(--error); }
+	.trace:has(> .thinking) > b { color: var(--thinkingText); }
+	.trace:has(> .custom) > b { color: var(--customMessageLabel); }
+	.trace:not(.open) > div { display: none; }
+	:where(.trace > div) { margin: 1lh 0; padding: 0 1ch; }
 	.error { color: var(--error); }
 	summary { cursor: pointer; }
 	p, pre, ul, ol, blockquote, table, hr, h1, h2, h3, h4 { margin: 1lh 0; }
@@ -55,6 +63,9 @@
 </footer>
 <script>
 	let pc, dc, turns = [], height = 0;
+	const delegated = new Set();
+
+	log.onclick = (e) => e.target.matches(".trace > b") && e.target.parentElement.classList.toggle("open");
 
 	// Stay at the bottom while content arrives, unless the user scrolled up.
 	new ResizeObserver(() => {
@@ -103,13 +114,19 @@
 		dc.onopen = () => (toggle.textContent = "Stop");
 		dc.onmessage = (e) => {
 			const event = JSON.parse(e.data);
-			if (event.type === "delegation.created") {
-				fetch("delegate", { method: "POST", body: JSON.stringify({ item: event.item, turns }) });
+			if (event.type === "delegation.created" && event.item.target === "client") {
+				const request = event.item.content
+					.filter((part) => part.type === "input_text")
+					.map((part) => part.text)
+					.join("");
+				delegated.add(request.trim());
+				fetch("delegate", { method: "POST", body: JSON.stringify({ id: event.item.id, request, turns }) });
 				turns = [];
 			}
 			if (event.type === "turn.done") {
 				const turn = `${event.turn.role === "user" ? "User" : "Voice"}: ${event.turn.transcript.trim()}`;
-				turns.push(turn);
+				// A user turn can finish after its handoff, which already carries it as the request.
+				if (event.turn.role !== "user" || !delegated.has(event.turn.transcript.trim())) turns.push(turn);
 				show("voice", turn);
 			}
 			if (event.type === "error") show("error", event.error.message);
