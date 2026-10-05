@@ -31,7 +31,6 @@ export default function (pi: ExtensionAPI) {
 	let token = "";
 	let url = "";
 	let delegation: string | undefined;
-	let reply: string | undefined;
 
 	// The realtime API rejects context appends over 500 tokens; 125 code points stay under 500 bytes.
 	function append(channel: "speakable" | "commentary", body: string, target?: string) {
@@ -151,16 +150,13 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("message_end", ({ message }) => {
 		if (message.role !== "assistant") return;
-		const said = text(message.content) || message.errorMessage || "";
-		const calls = message.content.filter((part) => part.type === "toolCall");
-		if (!calls.length) return void (reply = said);
-		if (said) append("speakable", said);
-		append("commentary", calls.map((part) => `pi is running ${part.name} ${JSON.stringify(part.arguments)}`.slice(0, 300)).join("\n"));
+		const said = text(message.content) || message.errorMessage;
+		// Progress updates go to commentary: on speakable, the voice takes them for answers.
+		if (said) append(message.stopReason === "toolUse" ? "commentary" : "speakable", said, delegation);
 	});
 
 	pi.on("agent_settled", () => {
-		if (reply) append("speakable", reply, delegation);
-		reply = delegation = undefined;
+		delegation = undefined;
 	});
 
 	pi.on("session_shutdown", stop);
