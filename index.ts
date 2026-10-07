@@ -265,10 +265,9 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function stop() {
-		if (!server) return;
 		stream?.end("event: end\ndata: bye\n\n");
 		tunnel?.kill();
-		server.close();
+		server?.close();
 		server = tunnel = stream = undefined;
 	}
 

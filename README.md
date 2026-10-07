@@ -2,6 +2,12 @@
 
 Talk to [Pi](https://github.com/earendil-works/pi) from any browser. A realtime voice model listens and speaks; Pi, on whatever model it is set to, does the work.
 
+## Install
+
+```bash
+pi install git:github.com/spoj/pi-tiny-voice
+```
+
 ## Usage
 
 ```text
