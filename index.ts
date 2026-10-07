@@ -60,7 +60,7 @@ const images = (content: Content) =>
 		? ""
 		: content
 				.filter((part) => part.type === "image")
-				.map((part) => `<img src="data:${part.mimeType};base64,${part.data}">`)
+				.map((part) => `<img src="data:${esc(part.mimeType)};base64,${esc(part.data)}">`)
 				.join("");
 
 // Like pi's terminal: `keep` lines from the start, or from the end when negative; the rest expand on tap.

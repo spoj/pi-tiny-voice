@@ -63,7 +63,7 @@
 </footer>
 <script>
 	let pc, dc, height = 0, delegation;
-	// Turns since pi last got the user's words; `sent` is how much of a user turn pi already has.
+	// Turns since pi last got the user's words; `sent` is the user transcript pi already has.
 	let turns = [];
 
 	// Pi gets the user's words it doesn't have yet as the request, and the voice's finished turns as context.
@@ -71,13 +71,15 @@
 	function handoff() {
 		const request = turns
 			.filter((turn) => turn.user)
-			.map((turn) => turn.said.slice(turn.sent).trim())
+			.map((turn) => turn.said.startsWith(turn.sent) ? turn.said.slice(turn.sent.length).trim() : `Correction: ${turn.said.trim()}`)
 			.filter(Boolean)
 			.join("\n");
 		const context = turns.filter((turn) => !turn.user && turn.done).map((turn) => `Voice: ${turn.said.trim()}`);
-		fetch("delegate", { method: "POST", body: JSON.stringify({ id: delegation, request, turns: context }) });
+		fetch("delegate", { method: "POST", body: JSON.stringify({ id: delegation, request, turns: context }) })
+			.then((response) => response.ok || Promise.reject())
+			.catch(() => show("error", "Handoff failed. Repeat your request."));
 		if (!request) return;
-		for (const turn of turns) if (turn.user) turn.sent = turn.said.length;
+		for (const turn of turns) if (turn.user) turn.sent = turn.said;
 		turns = turns.filter((turn) => !turn.done);
 	}
 
@@ -117,10 +119,12 @@
 
 	async function start() {
 		toggle.textContent = "Connecting…";
-		pc = new RTCPeerConnection();
+		const connection = (pc = new RTCPeerConnection());
 		const mic = await navigator.mediaDevices.getUserMedia({
 			audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
 		});
+		// Stop was pressed while the browser asked for the microphone.
+		if (pc !== connection) return mic.getTracks().forEach((track) => track.stop());
 		pc.addTrack(mic.getTracks()[0]);
 		const speaker = new Audio();
 		speaker.autoplay = true;
@@ -131,15 +135,15 @@
 		dc.onmessage = (e) => {
 			const event = JSON.parse(e.data);
 			if (event.type === "turn.created")
-				turns.push({ id: event.turn.id, user: event.turn.role === "user", said: event.turn.transcript, sent: 0 });
+				turns.push({ id: event.turn.id, user: event.turn.role === "user", said: event.turn.transcript, sent: "" });
 			if (event.type === "turn.delta") turns.find((turn) => turn.id === event.turn_id).said += event.delta;
 			if (event.type === "turn.done") {
 				const turn = turns.find((turn) => turn.id === event.turn.id);
 				turn.said = event.turn.transcript;
 				turn.done = true;
 				show("voice", `${turn.user ? "User" : "Voice"}: ${turn.said.trim()}`);
-				// The voice handed this turn over mid-sentence: pi gets the rest of it.
-				if (turn.sent && turn.said.slice(turn.sent).trim()) handoff();
+				// A finalized transcript may extend or correct an earlier handoff.
+				if (turn.sent && turn.said !== turn.sent) handoff();
 			}
 			// Pi gets the user's words the moment the voice delegates, even mid-sentence.
 			if (event.type === "delegation.created" && event.item.target === "client") {
