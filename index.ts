@@ -205,9 +205,15 @@ export default function (pi: ExtensionAPI) {
 		if (route === "") {
 			const { colors, appearance } = ctx.ui.theme;
 			const theme = Object.entries(colors).map(([name, color]) => `--${name}:${colorToHex(color)};`).join("");
+			// The transcript is markdown from the model and its tools: only the page's own script runs, which rules out
+			// javascript: links, and no image loads from elsewhere, which could carry the conversation out in its address.
+			const nonce = randomBytes(12).toString("base64url");
 			return res
-				.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-				.end(page.replace("/*theme*/", `${theme}color-scheme:${appearance};`));
+				.writeHead(200, {
+					"content-type": "text/html; charset=utf-8",
+					"content-security-policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'`,
+				})
+				.end(page.replace("/*theme*/", `${theme}color-scheme:${appearance};`).replace("<script>", `<script nonce="${nonce}">`));
 		}
 		if (route === "call") {
 			const answer = await call(body);

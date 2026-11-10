@@ -27,8 +27,16 @@ Open the printed address and press Start. The page shows the conversation in Pi 
 - The voice model hears only the conversation, never tool calls or results. It speaks Pi's answers. It also knows about Pi's progress updates and anything you type in Pi, but does not read them out.
 - The voice model starts with the last 6,000 characters of the conversation in Pi.
 - The server listens on `127.0.0.1` only, and each address carries a random token. Tailscale access comes from a foreground `tailscale serve`, which stops with the server.
+- The transcript is markdown from the model and its tools, so the page's content security policy runs only the page's own script and loads no images from elsewhere: a `javascript:` link does nothing, and an image address cannot carry the conversation out.
 
 ## Caveats
 
 - The ChatGPT realtime endpoint is private and could change without notice.
 - Only the most recently opened page follows Pi; opening the address elsewhere ends the earlier page and its call. Switching Pi sessions ends both.
+
+## Development
+
+```bash
+npm ci
+npm run check
+```
